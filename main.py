@@ -45,6 +45,18 @@ def find_area(fttx, fft, bounded_freq):
     return np.array(area)
 
 
+def algorithm(ear : Stream_Analyzer, lh_freq_bounds : tuple, rh_freq_bounds : tuple):  # freq_bounds are (lower freq, higher freq)
+    raw_fftx, raw_fft, binned_fftx, binned_fft = ear.get_audio_features()
+    
+    lh_indices = (np.argmin(np.abs(raw_fftx-lh_freq_bounds[0])), np.argmin(np.abs(raw_fftx-lh_freq_bounds[1])))
+    rh_indices = (np.argmin(np.abs(raw_fftx-rh_freq_bounds[0])), np.argmin(np.abs(raw_fftx-rh_freq_bounds[1])))
+    
+    lh_fft = raw_fft[lh_indices[0]:lh_indices[1]]
+    rh_fft = raw_fft[rh_indices[0]:rh_indices[1]]
+
+    return raw_fftx[lh_indices[0]:lh_indices[1]], lh_fft, raw_fftx[rh_indices[0]:rh_indices[1]], rh_fft
+
+
 ear = Stream_Analyzer(
     device=2,  # Pyaudio (portaudio) device index, defaults to first mic input
     rate=None,  # Audio samplerate, None uses the default source settings
@@ -57,7 +69,7 @@ ear = Stream_Analyzer(
 )
 
 plt.ion()
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(1, 2)
 
 piano_freqs = generate_piano_freqs(freq_bond=15)
 axis = [i for i in range(0, 88)]
@@ -67,8 +79,25 @@ last_update = time.time()
 while True:
     if (time.time() - last_update) > (1. / fps):
         last_update = time.time()
-        raw_fftx, raw_fft, binned_fftx, binned_fft = ear.get_audio_features()
 
+        # Camera does scanning, get ranges. If range not detected, them use previous range
+        lhx, lh_fft, rhx, rh_fft = algorithm(ear, (143, 180), (520, 670))  # D3-F3, C5-E5
+
+        ax[0].plot(lhx, lh_fft)
+        ax[0].set_title("Left Hand")
+        ax[0].set_ylim(0, 10000000)
+        ax[1].set_title("Right Hand")
+        ax[1].plot(rhx, rh_fft)
+        ax[1].set_ylim(0, 10000000)
+
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        ax[0].cla()
+        ax[1].cla()
+
+        '''
+        raw_fftx, raw_fft, binned_fftx, binned_fft = ear.get_audio_features()
+        
         highest_freq = np.argmin(np.abs(raw_fftx-piano_freqs[-1][1]))
 
         piano_fftx = raw_fftx[:highest_freq]
@@ -84,3 +113,4 @@ while True:
         fig.canvas.draw()
         fig.canvas.flush_events()
         ax.cla()
+        '''
