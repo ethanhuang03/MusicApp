@@ -47,7 +47,7 @@ def show_summary(processing_log):
 
     fig.suptitle('Processing Summary', fontsize=16)
     for step_idx, step_data in enumerate([processing_log[0], processing_log[-1]]):
-        ax = plt.subplot('12%i' % (step_idx + 1))
+        ax = plt.subplot(int('12%i' % (step_idx + 1)))
         ax.tick_params(
             bottom=False,
             right=False,
@@ -64,7 +64,7 @@ def show_process_steps(processing_log):
     fig = plt.figure()
     fig.suptitle('Processing Steps', fontsize=16)
     for step_idx, step_data in enumerate(processing_log):
-        ax = plt.subplot('33%i' % (step_idx + 1))
+        ax = plt.subplot(int('33%i' % (step_idx + 1)))
         ax.tick_params(
             bottom=False,
             right=False,

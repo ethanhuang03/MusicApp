@@ -35,7 +35,7 @@ def find_index_ranges(note_list, fft):
     for key, group in groupby(note_list):
         notes.append(key)
         group_len = len(list(group))
-        average_amplitude.append(sum(fft[start:start+group_len])/group_len)
+        average_amplitude.append(sum(fft[start:start+group_len])/group_len)  # sum(fft[start:start+group_len])/group_len
         start += group_len
     return notes, average_amplitude
 

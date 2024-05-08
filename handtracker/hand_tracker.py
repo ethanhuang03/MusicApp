@@ -10,7 +10,7 @@ hands = mp_hands.Hands(
     min_detection_confidence=0.7,
     min_tracking_confidence=0.3)
 
-cap = cv2.VideoCapture("river.mp4")  # 0 for webcam
+cap = cv2.VideoCapture(1)  # 0 for webcam
 while cap.isOpened():
     success, image = cap.read()
 
