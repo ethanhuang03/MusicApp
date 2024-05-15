@@ -15,6 +15,10 @@ def parse_image(file_path):
         ('Original Image', im_rgb)
     ]
 
+    # DELETE LATER
+    cv2.imshow('graycsale image', im_gray)
+    cv2.waitKey(0)
+
     # Get white components and their center masses
     white_components, y_cms, x_cms, components_matrix = get_white_connected_components(im_gray, processing_log)
     filter_center_masses(white_components, x_cms, y_cms, components_matrix, im_gray, processing_log)
@@ -35,3 +39,6 @@ if __name__ == '__main__':
     images_path = "C:\home\MusicApp\pianokeydetector\images"
     for file in os.listdir(images_path):
         parse_image(os.path.join(images_path, file))
+
+
+
