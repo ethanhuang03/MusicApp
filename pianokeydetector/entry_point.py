@@ -36,9 +36,12 @@ def parse_image(file_path):
 
 
 if __name__ == '__main__':
+
+    parse_image("C:\\Users\\Ethan\\Pictures\\Screenshots\\test.png")
+    '''
     images_path = "C:\home\MusicApp\pianokeydetector\images"
     for file in os.listdir(images_path):
         parse_image(os.path.join(images_path, file))
-
+    '''
 
 
