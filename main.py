@@ -4,7 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-from handtracker.hand_tracker import HandTracking
+from handtracker.handtracker import HandTracking
 
 
 def filtered_fft(ear: Stream_Analyzer, lh_freq_bounds: tuple,
