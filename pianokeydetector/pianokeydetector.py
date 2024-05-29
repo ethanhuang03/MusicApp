@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 
 
 class PianoKeyDetector:
-    def __init__(self, image_path):
-        self.image_path = image_path
-        self.image = cv2.imread(image_path)
+    def __init__(self, image_data):  # Image Data can be either path to image, or cv2 matrix
+        if type(image_data) == str:
+            self.image = cv2.imread(image_data)
+        else:
+            self.image = image_data
         self.corner_points = []
         self.key_bounds = []
 
@@ -19,12 +21,10 @@ class PianoKeyDetector:
         return [top_left, bottom_left, bottom_right, top_right]
 
     def click_event(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
+        if event == cv2.EVENT_LBUTTONDOWN and len(self.corner_points) < 4:
             self.corner_points.append((x, y))
             cv2.circle(self.image, (x, y), 5, (0, 255, 0), -1)
             cv2.imshow('Image', self.image)
-            if len(self.corner_points) == 4:
-                cv2.destroyAllWindows()
 
     def get_corner_points(self):
         cv2.imshow('Image', self.image)
@@ -59,7 +59,7 @@ class PianoKeyDetector:
 
         # Draw the key divisions
         key_width = width // nkeys
-        for i in range(1, nkeys):
+        for i in range(nkeys+1):
             x = i * key_width
             cv2.line(corrected_image, (x, 0), (x, height), (255, 0, 0), 2)
 
@@ -96,7 +96,3 @@ class PianoKeyDetector:
         self.process_image(nkeys)
         return self.key_bounds
 
-
-# Usage example:
-detector = PianoKeyDetector("C:\\home\\MusicApp\\pianokeydetector\\images\\1.jpg")
-print(detector.run(nkeys=7))
