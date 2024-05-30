@@ -1,85 +1,76 @@
-from realtimefft.stream_analyzer import Stream_Analyzer
-from itertools import groupby
+import cv2
 import time
-import matplotlib.pyplot as plt
-import numpy as np
+from pianokeydetector.pianokeydetector import PianoKeyDetector
+from handtracker.handtracker import HandTracking
 
 
-def filtered_fft(ear: Stream_Analyzer, lh_freq_bounds: tuple,
-                 rh_freq_bounds: tuple):  # freq_bounds are (lower freq, higher freq)
-    raw_fftx, raw_fft, binned_fftx, binned_fft = ear.get_audio_features()
+def check_point_position(line_segment, point):
+    (x1, y1) = line_segment[1] if line_segment[1][1] >= line_segment[0][1] else line_segment[0]
+    (x2, y2) = line_segment[0] if line_segment[0][1] <= line_segment[1][1] else line_segment[1]
+    (x3, y3) = point
 
-    lh_indices = (np.argmin(np.abs(raw_fftx - lh_freq_bounds[0])), np.argmin(np.abs(raw_fftx - lh_freq_bounds[1])))
-    rh_indices = (np.argmin(np.abs(raw_fftx - rh_freq_bounds[0])), np.argmin(np.abs(raw_fftx - rh_freq_bounds[1])))
+    # Calculate the determinant (cross product) to determine the relative position
+    det = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)
 
-    lh_fft = raw_fft[lh_indices[0]:lh_indices[1]]
-    rh_fft = raw_fft[rh_indices[0]:rh_indices[1]]
-
-    return raw_fftx[lh_indices[0]:lh_indices[1]], lh_fft, raw_fftx[rh_indices[0]:rh_indices[1]], rh_fft
-
-
-def frequency_to_note(freq: float):
-    notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
-    A4 = 440
-    note_number = 12 * np.log2(freq / A4) + 49
-    note_number = round(note_number)
-    note = (note_number - 1) % len(notes)
-    note = notes[note]
-    octave = (note_number + 8) // len(notes)
-    return note + str(octave)
+    if det > 0:
+        return 1  # Point is to the right
+    elif det < 0:
+        return -1  # Point is to the left
+    else:
+        return 0  # Point is on the line
 
 
-def find_index_ranges(note_list, fft):
-    start = 0
-    average_amplitude = []
-    notes = []
-    for key, group in groupby(note_list):
-        notes.append(key)
-        group_len = len(list(group))
-        average_amplitude.append(
-            sum(fft[start:start + group_len]) / group_len)  # sum(fft[start:start+group_len])/group_len
-        start += group_len
-    return notes, average_amplitude
+# Calibrate Range:
+video_stream = "http://10.0.0.21:8080/video"
+detector = PianoKeyDetector(cv2.VideoCapture(video_stream).read()[1])
+detector.get_corner_points()
+nkeys = int(input("How many white keys are selected: "))
+lowest_note = input("What is the lowest note (e.g. C4): ")
+detector.process_image(nkeys)
+key_bounds = detector.key_bounds
+key_bounds_gradient = (key_bounds[0][0][1] - key_bounds[1][0][1])/(key_bounds[0][0][0] - key_bounds[1][0][0] + 0.00001)
 
-
-
-ear = Stream_Analyzer(
-    device=2,  # Pyaudio (portaudio) device index, defaults to first mic input
-    rate=None,  # Audio samplerate, None uses the default source settings
-    FFT_window_size_ms=100,  # Window size used for the FFT transform
-    updates_per_second=2000,  # How often to read the audio stream for new data
-    smoothing_length_ms=50,  # Apply some temporal smoothing to reduce noisy features
-    n_frequency_bins=600,  # The FFT features are grouped in bins
-    visualize=0,  # Visualize the FFT features with PyGame
-    verbose=0  # Print running statistics (latency, fps, ...)
-)
-
-plt.ion()
-fig, ax = plt.subplots(1, 2)
-
-fps = 60
-last_update = time.time()
+# Track Hands: 
+hand_tracking = HandTracking(capture_device=video_stream,
+                             show_camera=True,
+                             max_num_hands=2,
+                             key_bounds=key_bounds)
+hand_tracking.running = True  # Start the thread
+hand_tracking.start()  # Start the thread
 while True:
-    if (time.time() - last_update) > (1. / fps):
-        last_update = time.time()
+    for hand in hand_tracking.hand_bounds:
+        bottom_left, top_right = hand[0], hand[1]
+        bottom_right = (top_right[0], bottom_left[1])
+        top_left = (bottom_left[0], top_right[1])
+        maximum_hand_range = []
+        for i in range(len(key_bounds)-1):
+            left_line = key_bounds[i]
+            right_line = key_bounds[i+1]
+            if key_bounds_gradient > 0:
+                if check_point_position(left_line, top_left) == 1 and \
+                        check_point_position(right_line, top_left) == -1:
+                    maximum_hand_range.append(right_line)
+                if check_point_position(left_line, bottom_right) == 1 and \
+                        check_point_position(right_line, bottom_right) == -1:
+                    maximum_hand_range.append(right_line)
+                    break
+            else:
+                if check_point_position(left_line, bottom_left) == 1 and \
+                        check_point_position(right_line, bottom_left) == -1:
+                    maximum_hand_range.append(right_line)
+                    pass
+                if check_point_position(left_line, top_right) == 1 and \
+                        check_point_position(right_line, top_right) == -1:
+                    maximum_hand_range.append(right_line)
+                    break
 
-        # Camera does scanning, get ranges. If range not detected, them use previous range
-        lhx, lh_fft, rhx, rh_fft = filtered_fft(ear, (143, 180), (520, 670))  # D3-F3, C5-E5
+        print(maximum_hand_range)
+        maximum_hand_range = []
+        time.sleep(0.5)
 
-        lhnotes = list(map(frequency_to_note, lhx))
-        rhnotes = list(map(frequency_to_note, rhx))
+    # print(hand_tracking.hand_bounds)
+    # hand_tracking.running = False
 
-        lhnotes, lh_amplitudes = find_index_ranges(lhnotes, lh_fft)
-        rhnotes, rh_amplitudes = find_index_ranges(rhnotes, rh_fft)
+    # hand_tracking.hand_bounds: [[(x_min, y_min), (x_max, y_max)], [(x_min, y_min), (x_max, y_max)]]
+    # key_bounds = [[(x, y),(x, y)], [(x, y),(x, y)], [(x, y),(x, y)], [(x, y),(x, y)]]
 
-        ax[0].bar(lhnotes, lh_amplitudes)
-        ax[0].set_title("Left Hand")
-        # ax[0].set_ylim(0, 10000000)
-        ax[1].set_title("Right Hand")
-        ax[1].bar(rhnotes, rh_amplitudes)
-        # ax[1].set_ylim(0, 10000000)
-
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        ax[0].cla()
-        ax[1].cla()
