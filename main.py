@@ -1,5 +1,5 @@
 import cv2
-import time
+import keyboard
 from pianokeydetector.pianokeydetector import PianoKeyDetector
 from handtracker.handtracker import HandTracking
 
@@ -20,33 +20,17 @@ def check_point_position(line_segment, point):
         return 0  # Point is on the line
 
 
-# Calibrate Range:
-video_stream = "http://10.0.0.21:8080/video"
-detector = PianoKeyDetector(cv2.VideoCapture(video_stream).read()[1])
-detector.get_corner_points()
-nkeys = int(input("How many white keys are selected: "))
-lowest_note = input("What is the lowest note (e.g. C4): ")
-detector.process_image(nkeys)
-key_bounds = detector.key_bounds
-key_bounds_gradient = (key_bounds[0][0][1] - key_bounds[1][0][1])/(key_bounds[0][0][0] - key_bounds[1][0][0] + 0.00001)
-
-# Track Hands: 
-hand_tracking = HandTracking(capture_device=video_stream,
-                             show_camera=True,
-                             max_num_hands=2,
-                             key_bounds=key_bounds)
-hand_tracking.running = True  # Start the thread
-hand_tracking.start()  # Start the thread
-while True:
-    for hand in hand_tracking.hand_bounds:
+def calculate_hand_coverage(hand_tracker, key_bound_line, key_bound_line_gradient):
+    hand_coverage = []
+    for hand in hand_tracker.hand_bounds:
         bottom_left, top_right = hand[0], hand[1]
         bottom_right = (top_right[0], bottom_left[1])
         top_left = (bottom_left[0], top_right[1])
         maximum_hand_range = []
-        for i in range(len(key_bounds)-1):
-            left_line = key_bounds[i]
-            right_line = key_bounds[i+1]
-            if key_bounds_gradient > 0:
+        for i in range(len(key_bound_line) - 1):
+            left_line = key_bound_line[i]
+            right_line = key_bound_line[i + 1]
+            if key_bound_line_gradient > 0:
                 if check_point_position(left_line, top_left) == 1 and \
                         check_point_position(right_line, top_left) == -1:
                     maximum_hand_range.append(right_line)
@@ -58,19 +42,40 @@ while True:
                 if check_point_position(left_line, bottom_left) == 1 and \
                         check_point_position(right_line, bottom_left) == -1:
                     maximum_hand_range.append(right_line)
-                    pass
                 if check_point_position(left_line, top_right) == 1 and \
                         check_point_position(right_line, top_right) == -1:
                     maximum_hand_range.append(right_line)
                     break
 
-        print(maximum_hand_range)
-        maximum_hand_range = []
-        time.sleep(0.5)
+        hand_coverage.append(maximum_hand_range)
+    return hand_coverage
 
-    # print(hand_tracking.hand_bounds)
-    # hand_tracking.running = False
 
-    # hand_tracking.hand_bounds: [[(x_min, y_min), (x_max, y_max)], [(x_min, y_min), (x_max, y_max)]]
-    # key_bounds = [[(x, y),(x, y)], [(x, y),(x, y)], [(x, y),(x, y)], [(x, y),(x, y)]]
+# Calibrate Range:
+video_stream = "http://10.0.0.21:8080/video"
+detector = PianoKeyDetector(cv2.VideoCapture(video_stream).read()[1])
+detector.get_corner_points()
+nkeys = int(input("How many white keys are selected: "))
+lowest_note = input("What is the lowest note (e.g. C4): ")
+detector.process_image(nkeys)
+key_bounds = detector.key_bounds
+key_bounds_gradient = (key_bounds[0][0][1] - key_bounds[1][0][1])/(key_bounds[0][0][0] - key_bounds[1][0][0] + 0.00001)
 
+# Hand Tracking:
+hand_tracking = HandTracking(capture_device=video_stream, max_num_hands=2)
+show_camera = True
+while True:
+    frame = hand_tracking.process_frame()
+    if frame is None:
+        continue
+    if show_camera:
+        for line in key_bounds:
+            cv2.line(frame, line[0], line[1], (255, 0, 0), 2)
+        cv2.imshow('Hand Tracking', frame)
+    if cv2.waitKey(5) & 0xFF == 27 or keyboard.is_pressed('esc'):  # esc to terminate / failsafe
+        break
+
+    hand_coverage = calculate_hand_coverage(hand_tracking, key_bounds, key_bounds_gradient)
+    print(hand_coverage)
+
+hand_tracking.release()

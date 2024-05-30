@@ -1,13 +1,10 @@
 import cv2
 import mediapipe as mp
-import threading
 
 
-class HandTracking(threading.Thread):
+class HandTracking:
     def __init__(self, capture_device=0, static_image_mode=False, max_num_hands=2, min_detection_confidence=0.7,
-                 min_tracking_confidence=0.3, show_camera=True, key_bounds=None):
-        super(HandTracking, self).__init__()
-        self.running = False  # For stopping the thread
+                 min_tracking_confidence=0.3):
         self.mp_hands = mp.solutions.hands
         self.mp_draw = mp.solutions.drawing_utils
         self.hands = self.mp_hands.Hands(
@@ -17,9 +14,6 @@ class HandTracking(threading.Thread):
             min_tracking_confidence=min_tracking_confidence
         )
         self.cap = cv2.VideoCapture(capture_device)  # 0 for webcam
-
-        self.show_camera = show_camera
-        self.key_bounds = key_bounds
         self.hand_bounds = []
 
     def process_frame(self):
@@ -49,16 +43,3 @@ class HandTracking(threading.Thread):
     def release(self):
         self.cap.release()
         cv2.destroyAllWindows()
-
-    def run(self):
-        while self.cap.isOpened() and self.running:
-            frame = self.process_frame()
-            if self.show_camera:
-                if self.key_bounds is not None:
-                    for line in self.key_bounds:
-                        cv2.line(frame, line[0], line[1], (255, 0, 0), 2)
-                cv2.imshow('Hand Tracking', frame)
-            if cv2.waitKey(5) & 0xFF == ord('q'):
-                break
-        self.release()
-

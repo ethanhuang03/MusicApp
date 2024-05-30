@@ -2,6 +2,21 @@ import cv2
 import mediapipe as mp
 import threading
 
+'''
+# Example Code:
+from handtracker.handtracker_threading import HandTracking
+hand_tracking = HandTracking(capture_device=0,
+                             show_camera=True,
+                             max_num_hands=2,
+                             key_bounds=None)
+hand_tracking.running = True  # Start the thread
+hand_tracking.start()  # Start the thread
+
+while True:
+    print(hand_tracking.hand_bounds)
+    # hand_tracking.running = False  # Stop the thread
+'''
+
 
 class HandTracking(threading.Thread):
     def __init__(self, capture_device=0, static_image_mode=False, max_num_hands=2, min_detection_confidence=0.7,
@@ -61,4 +76,3 @@ class HandTracking(threading.Thread):
             if cv2.waitKey(5) & 0xFF == ord('q'):
                 break
         self.release()
-
