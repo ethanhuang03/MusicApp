@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from utils import LineSegment
 
 
 class PianoKeyDetector:
@@ -73,7 +74,7 @@ class PianoKeyDetector:
 
             # Draw the transformed lines on the original image
             cv2.line(cropped_image, tuple(orig_pt1), tuple(orig_pt2), (255, 0, 0), 2)
-            self.key_bounds.append([tuple(orig_pt1), tuple(orig_pt2)])
+            self.key_bounds.append(LineSegment(tuple(orig_pt1), tuple(orig_pt2)))
 
         # Convert images from BGR to RGB for matplotlib
         cropped_image_rgb = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2RGB)

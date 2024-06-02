@@ -42,7 +42,6 @@ def find_index_ranges(note_list, fft):
     return notes, average_amplitude
 
 
-
 ear = Stream_Analyzer(
     device=2,  # Pyaudio (portaudio) device index, defaults to first mic input
     rate=None,  # Audio samplerate, None uses the default source settings

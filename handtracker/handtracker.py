@@ -1,5 +1,6 @@
 import cv2
 import mediapipe as mp
+from utils import LineSegment
 
 
 class HandTracking:
@@ -35,7 +36,8 @@ class HandTracking:
                     x_min = min(x, x_min)
                     y_min = min(y, y_min)
                 cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                self.hand_bounds.append([(x_min, y_min), (x_max, y_max)])
+                self.hand_bounds.append([LineSegment((x_min, y_min), (x_min, y_max)),
+                                         LineSegment((x_max, y_min), (x_max, y_max))])
         else:
             self.hand_bounds = []
         return image
