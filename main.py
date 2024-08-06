@@ -1,33 +1,47 @@
-import cv2
-import keyboard
-import matplotlib.pyplot as plt
-
-from pianokeydetector.pianokeydetector import PianoKeyDetector
-from handtracker.handtracker import HandTracking
 from realtimefft.stream_analyzer import Stream_Analyzer
-import utils
+from itertools import groupby
+import time
+import matplotlib.pyplot as plt
+import numpy as np
 
 
-# Calibrate Range:
-video_stream = 1  #"http://10.0.0.21:8080/video"
-detector = PianoKeyDetector(cv2.VideoCapture(video_stream).read()[1])
-detector.get_corner_points()
-nkeys = int(input("How many white keys are selected: "))
-lowest_note = input("What is the lowest note (e.g. C4): ")  # Only sharp keys
-detector.process_image(nkeys)
-key_bounds = detector.key_bounds
+def filtered_fft(ear: Stream_Analyzer, lh_freq_bounds: tuple,
+                 rh_freq_bounds: tuple):  # freq_bounds are (lower freq, higher freq)
+    raw_fftx, raw_fft, binned_fftx, binned_fft = ear.get_audio_features()
 
-white_piano_notes = list(utils.white_piano_notes_frequencies.keys())
-lowest_note_index = white_piano_notes.index(lowest_note)
-notes_list = white_piano_notes[lowest_note_index-1:lowest_note_index + len(key_bounds)-1]  # A0 edge case
-key_bounds_dict = dict(zip(key_bounds, notes_list))
+    lh_indices = (np.argmin(np.abs(raw_fftx - lh_freq_bounds[0])), np.argmin(np.abs(raw_fftx - lh_freq_bounds[1])))
+    rh_indices = (np.argmin(np.abs(raw_fftx - rh_freq_bounds[0])), np.argmin(np.abs(raw_fftx - rh_freq_bounds[1])))
 
-# Hand Tracking:
-max_num_hands = 2
-hand_tracking = HandTracking(capture_device=video_stream, max_num_hands=max_num_hands)
-show_camera = False
+    lh_fft = raw_fft[lh_indices[0]:lh_indices[1]]
+    rh_fft = raw_fft[rh_indices[0]:rh_indices[1]]
 
-# FFT
+    return raw_fftx[lh_indices[0]:lh_indices[1]], lh_fft, raw_fftx[rh_indices[0]:rh_indices[1]], rh_fft
+
+
+def frequency_to_note(freq: float):
+    notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
+    A4 = 440
+    note_number = 12 * np.log2(freq / A4) + 49
+    note_number = round(note_number)
+    note = (note_number - 1) % len(notes)
+    note = notes[note]
+    octave = (note_number + 8) // len(notes)
+    return note + str(octave)
+
+
+def find_index_ranges(note_list, fft):
+    start = 0
+    average_amplitude = []
+    notes = []
+    for key, group in groupby(note_list):
+        notes.append(key)
+        group_len = len(list(group))
+        average_amplitude.append(
+            sum(fft[start:start + group_len]) / group_len)  # sum(fft[start:start+group_len])/group_len
+        start += group_len
+    return notes, average_amplitude
+
+
 ear = Stream_Analyzer(
     device=2,  # Pyaudio (portaudio) device index, defaults to first mic input
     rate=None,  # Audio samplerate, None uses the default source settings
@@ -38,36 +52,33 @@ ear = Stream_Analyzer(
     visualize=0,  # Visualize the FFT features with PyGame
     verbose=0  # Print running statistics (latency, fps, ...)
 )
+
 plt.ion()
-fig, ax = plt.subplots(1, max_num_hands)
+fig, ax = plt.subplots(1, 2)
 
-
+fps = 60
+last_update = time.time()
 while True:
-    frame = hand_tracking.process_frame()
-    if frame is None:
-        continue
-    if show_camera:
-        for line in key_bounds:
-            cv2.line(frame, line.point1, line.point2, (255, 0, 0), 2)
-        cv2.imshow('Hand Tracking', frame)
-    if cv2.waitKey(5) & 0xFF == 27 or keyboard.is_pressed('esc'):  # esc to terminate / failsafe
-        break
+    if (time.time() - last_update) > (1. / fps):
+        last_update = time.time()
 
-    hand_coverage = utils.calculate_hand_coverage(hand_tracking, key_bounds)
-    for i, hand in enumerate(hand_coverage):
-        note_range = []
-        for line in hand:
-            note_range.append(key_bounds_dict[line])
-        # print(f"Hand {i + 1}: {note_range}")
+        # Camera does scanning, get ranges. If range not detected, them use previous range
+        lhx, lh_fft, rhx, rh_fft = filtered_fft(ear, (143, 180), (520, 670))  # D3-F3, C5-E5
 
-        # Filtered FFT Analysis
-        fftx, fft = utils.filtered_fft(ear, (utils.white_piano_notes_frequencies[note_range[0]][0],
-                                             utils.white_piano_notes_frequencies[note_range[-1]][-1]))
-        # Plot FFT
-        ax[i].bar(fftx, fft)
-        ax[i].set_title(f"Hand {i + 1}")
+        lhnotes = list(map(frequency_to_note, lhx))
+        rhnotes = list(map(frequency_to_note, rhx))
+
+        lhnotes, lh_amplitudes = find_index_ranges(lhnotes, lh_fft)
+        rhnotes, rh_amplitudes = find_index_ranges(rhnotes, rh_fft)
+
+        ax[0].bar(lhnotes, lh_amplitudes)
+        ax[0].set_title("Left Hand")
+        ax[0].set_ylim(0, 10000000)
+        ax[1].set_title("Right Hand")
+        ax[1].bar(rhnotes, rh_amplitudes)
+        ax[1].set_ylim(0, 10000000)
+
         fig.canvas.draw()
         fig.canvas.flush_events()
-        ax[i].cla()
-
-hand_tracking.release()
+        ax[0].cla()
+        ax[1].cla()
